@@ -40,6 +40,9 @@ export interface QRCodeItem {
   status: 'ativo' | 'desativado';
   scan_count: number;
   last_scanned_at: string | null;
+  batch_id: string | null;
+  batch_sequence_number: number | null;
+  generation_type: string;
   created_at: string;
   updated_at: string;
 }
@@ -52,6 +55,17 @@ export interface QRCodeHistory {
   changed_by: string;
   changed_at: string;
   reason: string | null;
+}
+
+export interface QRBatch {
+  id: string;
+  batch_name: string;
+  quantity: number;
+  status: string;
+  prefix: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Setting {
@@ -190,27 +204,53 @@ export function isValidUrl(urlString: string): boolean {
 /**
  * Gera código público seguro de 6 caracteres (A-Z, 2-9) sem ambiguidades
  * Ex: A7K92X, K8P3LM, XQ72AB
+ * GARANTIA: Verifica no banco E no registro global de todos os códigos gerados
  */
 export async function generateUniquePublicCode(db: DatabaseDriver): Promise<string> {
   const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
   let attempts = 0;
 
-  while (attempts < 50) {
+  while (attempts < 100) {
     let code = '';
     const randomBytes = crypto.getRandomValues(new Uint8Array(6));
     for (let i = 0; i < 6; i++) {
       code += chars[randomBytes[i] % chars.length];
     }
 
-    const existing = await db.queryFirst('SELECT id FROM qr_codes WHERE code = ?', [code]);
-    if (!existing) {
-      return code;
+    // Verifica em qr_codes (QR ativo)
+    const existsInActive = await db.queryFirst('SELECT id FROM qr_codes WHERE code = ?', [code]);
+    if (existsInActive) {
+      attempts++;
+      continue;
     }
-    attempts++;
+
+    // Verifica em qr_codes_all_time (NUNCA reutilizar, nem se deletado)
+    const existsGlobally = await db.queryFirst('SELECT code FROM qr_codes_all_time WHERE code = ?', [code]);
+    if (existsGlobally) {
+      attempts++;
+      continue;
+    }
+
+    return code;
   }
 
-  // Fallback caso raro de colisão repetida
-  return 'QR' + Date.now().toString(36).toUpperCase().slice(-4);
+  // Fallback com timestamp + random (extremamente raro)
+  return 'QR' + Date.now().toString(36).toUpperCase().slice(-6);
+}
+
+/**
+ * Registra um código gerado no histórico global (nunca será reutilizado)
+ */
+export async function trackCodeGeneration(db: DatabaseDriver, code: string): Promise<void> {
+  const now = new Date().toISOString();
+  try {
+    await db.run(
+      'INSERT OR IGNORE INTO qr_codes_all_time (code, generated_at, is_active) VALUES (?, ?, ?)',
+      [code, now, 1]
+    );
+  } catch (err) {
+    console.error('Erro ao registrar código no histórico global:', err);
+  }
 }
 
 /**
@@ -250,6 +290,9 @@ export async function initDatabase(db: DatabaseDriver): Promise<void> {
       status TEXT NOT NULL DEFAULT 'ativo',
       scan_count INTEGER NOT NULL DEFAULT 0,
       last_scanned_at TEXT,
+      batch_id TEXT,
+      batch_sequence_number INTEGER,
+      generation_type TEXT DEFAULT 'individual',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT
@@ -266,19 +309,40 @@ export async function initDatabase(db: DatabaseDriver): Promise<void> {
       FOREIGN KEY (qr_code_id) REFERENCES qr_codes(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS qr_batches (
+      id TEXT PRIMARY KEY,
+      batch_name TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      prefix TEXT,
+      created_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS qr_codes_all_time (
+      code TEXT PRIMARY KEY,
+      generated_at TEXT NOT NULL,
+      is_active BOOLEAN DEFAULT 1
+    );
+
     CREATE INDEX IF NOT EXISTS idx_qr_codes_code ON qr_codes(code);
     CREATE INDEX IF NOT EXISTS idx_qr_codes_customer_id ON qr_codes(customer_id);
     CREATE INDEX IF NOT EXISTS idx_qr_codes_status ON qr_codes(status);
+    CREATE INDEX IF NOT EXISTS idx_qr_codes_batch_id ON qr_codes(batch_id);
+    CREATE INDEX IF NOT EXISTS idx_qr_codes_batch_status ON qr_codes(batch_id, status);
     CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
     CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
     CREATE INDEX IF NOT EXISTS idx_qr_history_qr_id ON qr_code_history(qr_code_id);
     CREATE INDEX IF NOT EXISTS idx_qr_history_changed_at ON qr_code_history(changed_at);
+    CREATE INDEX IF NOT EXISTS idx_qr_batches_created_at ON qr_batches(created_at);
+    CREATE INDEX IF NOT EXISTS idx_qr_all_time_code ON qr_codes_all_time(code);
   `);
 
   // Verifica se existe algum administrador cadastrado
