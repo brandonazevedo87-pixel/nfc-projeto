@@ -137,6 +137,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  createQRBatch: (data: {
+    customer_id: string;
+    quantity: number;
+    prefix?: string;
+    qr_data: Array<{ title: string; destination_url: string }>;
+  }) =>
+    request<{ batch: any; qrCodes: QRCodeItem[] }>('/api/admin/qr-codes/batch/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   updateQRCodeMeta: (id: string, data: { title?: string; customer_id?: string }) =>
     request<{ qrCode: QRCodeItem }>(`/api/admin/qr-codes/${id}`, {
       method: 'PUT',
@@ -157,6 +167,12 @@ export const api = {
   deleteQRCode: (id: string) =>
     request<{ success: boolean; message: string }>(`/api/admin/qr-codes/${id}`, {
       method: 'DELETE',
+    }),
+  downloadQRBatch: (batchId: string, format: 'png' | 'svg' | 'zip' = 'png') =>
+    fetch(`/api/admin/qr-codes/batch/${batchId}/download?format=${format}`, {
+      headers: {
+        'Authorization': `Bearer ${getStoredToken()}`,
+      },
     }),
 
   // Settings & Backup
