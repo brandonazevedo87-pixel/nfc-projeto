@@ -34,6 +34,9 @@ CREATE TABLE IF NOT EXISTS qr_codes (
   status TEXT NOT NULL DEFAULT 'ativo', -- 'ativo', 'desativado'
   scan_count INTEGER NOT NULL DEFAULT 0,
   last_scanned_at TEXT,
+  batch_id TEXT, -- Associação com lote (NULL se individual)
+  batch_sequence_number INTEGER, -- Número sequencial no lote (001, 002, etc)
+  generation_type TEXT DEFAULT 'individual', -- 'individual' ou 'batch'
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT
@@ -51,18 +54,42 @@ CREATE TABLE IF NOT EXISTS qr_code_history (
   FOREIGN KEY (qr_code_id) REFERENCES qr_codes(id) ON DELETE CASCADE
 );
 
--- 5. Tabela de Configurações do Sistema
+-- 5. Tabela de Lotes de QR Codes
+CREATE TABLE IF NOT EXISTS qr_batches (
+  id TEXT PRIMARY KEY,
+  batch_name TEXT NOT NULL,
+  quantity INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ativo', -- 'ativo', 'arquivado'
+  prefix TEXT,
+  created_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 6. Tabela de Configurações do Sistema
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 
+-- 7. Tabela de Rastreamento Global de Códigos (segurança anti-duplicação)
+CREATE TABLE IF NOT EXISTS qr_codes_all_time (
+  code TEXT PRIMARY KEY,
+  generated_at TEXT NOT NULL,
+  is_active BOOLEAN DEFAULT 1
+);
+
 -- Índices de Alta Performance
 CREATE INDEX IF NOT EXISTS idx_qr_codes_code ON qr_codes(code);
 CREATE INDEX IF NOT EXISTS idx_qr_codes_customer_id ON qr_codes(customer_id);
 CREATE INDEX IF NOT EXISTS idx_qr_codes_status ON qr_codes(status);
+CREATE INDEX IF NOT EXISTS idx_qr_codes_batch_id ON qr_codes(batch_id);
+CREATE INDEX IF NOT EXISTS idx_qr_codes_batch_status ON qr_codes(batch_id, status);
 CREATE INDEX IF NOT EXISTS idx_customers_status ON customers(status);
 CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
 CREATE INDEX IF NOT EXISTS idx_qr_history_qr_id ON qr_code_history(qr_code_id);
 CREATE INDEX IF NOT EXISTS idx_qr_history_changed_at ON qr_code_history(changed_at);
+CREATE INDEX IF NOT EXISTS idx_qr_batches_created_at ON qr_batches(created_at);
+CREATE INDEX IF NOT EXISTS idx_qr_all_time_code ON qr_codes_all_time(code);
