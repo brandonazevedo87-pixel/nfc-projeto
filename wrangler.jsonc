@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qr-placas",
+  "main": "worker.ts",
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "qr-placas-db",
+      "database_id": "PREENCHER_COM_SEU_D1_DATABASE_ID"
+    }
+  ],
+  "vars": {
+    "APP_URL": "https://qr.meudominio.com.br",
+    "ADMIN_EMAIL": "admin@qrplacas.com"
+  }
+}

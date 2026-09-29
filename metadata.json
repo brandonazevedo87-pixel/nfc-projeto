@@ -1,0 +1,6 @@
+{
+  "name": "QR Placas - Gerenciador de QR Codes Dinâmicos",
+  "description": "Plataforma profissional de gerenciamento de QR Codes dinâmicos para placas físicas e NFC com redirecionamento em tempo real e histórico de alterações.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
