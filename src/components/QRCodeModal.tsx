@@ -28,28 +28,36 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   const [showNfcBadge, setShowNfcBadge] = useState(true);
   const [svgContent, setSvgContent] = useState('');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [qrImageDataUrl, setQrImageDataUrl] = useState<string>('');
 
   if (!qrCode) return null;
 
   const publicUrl = `${publicBaseUrl.replace(/\/+$/, '')}/q/${qrCode.code}`;
 
   useEffect(() => {
-    // Renderiza o QR Code em alta resolução (1200x1200) no canvas
+    // Renderiza o QR Code em canvas com a URL pública permanente
     if (canvasRef.current) {
       QRCode.toCanvas(
         canvasRef.current,
         publicUrl,
         {
-          width: 600,
+          width: 400,
           margin: 2,
           color: {
-            dark: plateStyle === 'black' || plateStyle === 'gold' ? '#000000' : '#0F172A',
+            dark: '#000000',
             light: '#FFFFFF',
           },
-          errorCorrectionLevel: 'H', // Nível H permite inclusão de logo/resistência a riscos na placa física
+          errorCorrectionLevel: 'H',
         },
         (error) => {
-          if (error) console.error('Erro ao renderizar canvas QR:', error);
+          if (error) {
+            console.error('Erro ao renderizar canvas QR:', error);
+          } else {
+            // Captura o data URL para download
+            if (canvasRef.current) {
+              setQrImageDataUrl(canvasRef.current.toDataURL('image/png'));
+            }
+          }
         }
       );
     }
@@ -85,8 +93,17 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
   };
 
   const handleDownloadPNG = () => {
-    // Cria canvas temporário de 2000x2000px para qualidade máxima de impressão UV
+    // Cria canvas de 2000x2000px para impressão UV com alta qualidade
     const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 2000;
+    tempCanvas.height = 2000;
+    const ctx = tempCanvas.getContext('2d');
+    if (!ctx) return;
+
+    // Fundo branco
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, 2000, 2000);
+
     QRCode.toCanvas(
       tempCanvas,
       publicUrl,
@@ -102,7 +119,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
       (err) => {
         if (!err) {
           const link = document.createElement('a');
-          link.download = `QR_Placa_${qrCode.code}_UltraHD.png`;
+          link.download = `QR-${qrCode.code}-${qrCode.title?.replace(/\s+/g, '_') || 'placa'}.png`;
           link.href = tempCanvas.toDataURL('image/png');
           link.click();
         }
@@ -114,7 +131,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
     if (!svgContent) return;
     const blob = new Blob([svgContent], { type: 'image/svg+xml' });
     const link = document.createElement('a');
-    link.download = `QR_Placa_${qrCode.code}_Vetorial.svg`;
+    link.download = `QR-${qrCode.code}-${qrCode.title?.replace(/\s+/g, '_') || 'placa'}.svg`;
     link.href = URL.createObjectURL(blob);
     link.click();
   };
@@ -153,7 +170,7 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({
         <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-slate-900">Placa Físico & QR Code</h2>
+              <h2 className="text-base font-semibold text-slate-900">Placa Física & QR Code</h2>
               <span className="font-mono text-xs font-bold px-2 py-0.5 bg-slate-100 text-slate-800 rounded border border-slate-200">
                 {qrCode.code}
               </span>
